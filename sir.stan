@@ -3,19 +3,20 @@
 
 functions {
   
-  // Deterministic ODE of the SIR model. Function signature matches rk45 solver's expectation.
+  // Deterministic ODE of the SEIR model. Function signature matches rk45 solver's expectation.
   real[] SIR(
     real t,       // Time period; unused.
-    real[] y,     // System state {susceptible,infected,recovered}.
+    real[] y,     // System state {susceptible,exposed,infected,recovered}.
     real[] theta, // Parameters.
     real[] x_r,   // Continuous-valued data; unused.
     int[] x_i     // Integer-valued data; unused.
   ) {
-    real dy_dt[3];
+    real dy_dt[4];
     
-    dy_dt[1] = -theta[1] * y[1] * y[2];
-    dy_dt[2] = theta[1] * y[1] * y[2] - theta[2] * y[2];
-    dy_dt[3] = theta[2] * y[2];
+    dy_dt[1] = -theta[1] * y[1] * y[3];
+    dy_dt[2] = theta[1] * y[1] * y[3] - theta[2] * y[2];
+    dy_dt[3] = theta[2] * y[2] - theta[3] * y[3];
+    dy_dt[4] = theta[3] * y[3];
     
     return dy_dt;
   }
@@ -42,17 +43,19 @@ transformed data {
 }
   
 parameters {
-  real<lower=0> theta[n_theta];   // ODE model parameters {beta,gamma}
-  real<lower=0, upper=1> S0;      // initial fraction of susceptible individuals
+  real<lower=0> theta[n_theta];   // ODE model parameters.
+  real<lower=0> I0;      // initial number of infected individuals
+  real<lower=0> E0;      // Initial number of exposed individuals
 }
   
 transformed parameters{
   real y_hat[n_obs, n_difeq]; // solution from the ODE solver
   real y_init[n_difeq];       // initial conditions for both fractions of S and I
-  
-  y_init[1] = S0;
-  y_init[2] = 1 - S0;
-  y_init[3] = 0;
+
+  y_init[1] = 1.0 - I0/n_pop - E0/n_pop;
+  y_init[2] = E0/n_pop;
+  y_init[3] = I0/n_pop;
+  y_init[4] = 0;
   y_hat = integrate_ode_rk45(SIR, y_init, t0, ts, theta, x_r, x_i);
 }
   
@@ -60,27 +63,30 @@ model {
   real lambda[n_obs];              // Poisson rate parameter at each time point.
   
   // Priors.
-  theta[1] ~ lognormal(0,1);
-  theta[2] ~ gamma(0.004,0.02);  // Assume mean infectious period = 5 days 
-  S0 ~ beta(0.5, 0.5);
+  theta[1] ~ lognormal(0, 1);
+  theta[2] ~ gamma(20.0, 20.0/5.0);  // Mean asymptomatic period = 5 days.
+  theta[3] ~ gamma(20.0, 20.0/7.0);  // Mean infectious period = 7 days.
+  E0 ~ normal(300, 100);
+  I0 ~ normal(100, 2);
   
   // Likelihood
   for (i in 1:n_obs){
     // Public datasets report cumulative confirmed cases, which is I+R in this model.
-    lambda[i] = (y_hat[i,2] + y_hat[i,3]) * n_pop;
+    lambda[i] = (y_hat[i,3] + y_hat[i,4]) * n_pop;
   }
   y ~ poisson(lambda);
 }
   
 generated quantities {
-  real R_0;      // Basic reproduction number
   real y_forc[n_forecast, n_difeq]; // solution from the ODE solver
   real y_init_forc[n_difeq];  // Initial condition for the forward projection.
+  real R0;
   
-  R_0 = theta[1]/theta[2];
+  R0 = theta[1]/theta[3];
   
   y_init_forc[1] = y_hat[n_obs, 1];
   y_init_forc[2] = y_hat[n_obs, 2];
   y_init_forc[3] = y_hat[n_obs, 3];
+  y_init_forc[4] = y_hat[n_obs, 4];
   y_forc = integrate_ode_rk45(SIR, y_init_forc, t0, tf, theta, x_r, x_i);
 }

@@ -23,13 +23,15 @@ functions {
 }
 
 data {
-  int<lower = 1> n_obs;       // Number of days observed.
-  int<lower = 1> n_theta;     // Number of model parameters.
-  int<lower = 1> n_difeq;     // Number of differential equations.
-  int<lower = 1> n_pop;       // Population.
+  int<lower=1> n_obs;       // Number of days observed.
+  int<lower=0> n_forecast;   // Number of days to project.
+  int<lower=1> n_theta;     // Number of model parameters.
+  int<lower=1> n_difeq;     // Number of differential equations.
+  int<lower=1> n_pop;       // Population.
   int y[n_obs];           // Data: total number of infected individuals each day
   real t0;      // Initial time tick for the ODE solver. Must be provided in the data block.
   real ts[n_obs];  // Time ticks for the ODE solver. Must be provided in the data block.
+  real tf[n_forecast];  // Time ticks for the forward projections.
 }
   
 transformed data {
@@ -72,7 +74,13 @@ model {
   
 generated quantities {
   real R_0;      // Basic reproduction number
+  real y_forc[n_forecast, n_difeq]; // solution from the ODE solver
+  real y_init_forc[n_difeq];  // Initial condition for the forward projection.
+  
   R_0 = theta[1]/theta[2];
   
-  
+  y_init_forc[1] = y_hat[n_obs, 1];
+  y_init_forc[2] = y_hat[n_obs, 2];
+  y_init_forc[3] = y_hat[n_obs, 3];
+  y_forc = integrate_ode_rk45(SIR, y_init_forc, t0, tf, theta, x_r, x_i);
 }

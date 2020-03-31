@@ -31,7 +31,7 @@ data {
   int<lower=1> n_pop;       // Population.
   int y[n_obs];           // Data: total number of infected individuals each day
   real t0;      // Initial time tick for the ODE solver. Must be provided in the data block.
-  real ts[n_obs];  // Time ticks for the ODE solver. Must be provided in the data block.
+  real ts[2];  // Time ticks for the ODE solver. Must be provided in the data block.
   real tf[n_forecast];  // Time ticks for the forward projections.
 }
   
@@ -49,14 +49,24 @@ parameters {
 }
   
 transformed parameters{
-  real y_hat[n_obs, n_difeq]; // solution from the ODE solver
+  real y_hat[n_obs, n_difeq];
+  real dy_dt[n_obs, n_difeq];
   real y_init[n_difeq];       // initial conditions for both fractions of S and I
 
   y_init[1] = 1.0 - I0/n_pop - E0/n_pop;
   y_init[2] = E0/n_pop;
   y_init[3] = I0/n_pop;
   y_init[4] = 0;
-  y_hat = integrate_ode_rk45(SIR, y_init, t0, ts, theta, x_r, x_i);
+  dy_dt[1,] = SIR(0, y_init, theta, x_r, x_i);
+  for (i in 1:n_difeq) {
+    y_hat[1,i] = y_init[i] + dy_dt[1,i];
+  }
+  for (t in 2:n_obs) {
+    dy_dt[t,] = SIR(0, y_hat[t-1,], theta, x_r, x_i);
+    for (i in 1:n_difeq) {
+      y_hat[t,i] = y_hat[t-1,i] + dy_dt[t,i];
+    }
+  }
 }
   
 model {

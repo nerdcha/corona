@@ -20,7 +20,7 @@ corona_data <- list(n_obs=n_obs,
                     n_pop=population,
                     y=obs,
                     t0=0,
-                    ts=1:n_obs,
+                    ts=1:2,
                     tf=1:n_forecast)
 initial_values <- function() {
   list(theta=c(runif(1, 0, 5), runif(1, 0.2, 0.4), runif(1, 0.2, 0.4)), 

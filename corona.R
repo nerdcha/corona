@@ -55,7 +55,7 @@ initial_values <- function() {
   )
 }
 
-model <- stan("sir.stan", data=corona_data, init=initial_values, chains=4, iter=50000)
+model <- stan("sir.stan", data=corona_data, init=initial_values, chains=4, iter=2000)
 fitted_values <- rstan::extract(model)
 
 # Given a TxD array and a string name, return a data frame of T-length vectors suitable for a fanchart.

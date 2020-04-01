@@ -93,19 +93,19 @@ model {
   // Poisson rate parameter at each time point.
   real lambda[n_obs];
   
-  // Prior on steady-state contact rate: given 7-day infectious period, R0 = 2 ± 0.2.
-  theta[1] ~ normal(2.0/7.0, 0.1);
-  // Prior on mean incubation period: 5 days ± 1.
+  // Prior on steady-state contact rate: given 7-day infectious period, R0 ~ 2.
+  theta[1] ~ normal(2.0/7.0, 0.05);
+  // Prior on mean incubation period: 5 days.
   theta[2] ~ normal(1.0/5.0, 1.0);
-  // Prior on infectious period: 7 days ± 1.
-  theta[3] ~ normal(1.0/7.0, 0.5);  // Mean infectious period = 7 days.
+  // Prior on infectious period: 7 days.
+  theta[3] ~ normal(1.0/7.0, 0.01);
   // Prior on t0 incubation number: 300 ± 200. Note that data starts with 100 measured infections.
   E0 ~ normal(300, 100);
   // Prior on initial infections number: 100 ± 5.
   I0 ~ normal(100, 2.5);
-  // Prior on changes to the contact rate: up to 10% of the steady-state rate.
-  sigma ~ normal(0, 0.01);
-  // Prior on regression to the mean contact rate: pretty flat.
+  // Prior on changes to the contact rate: up to 5% of the steady-state rate.
+  sigma ~ normal(0, 0.015);
+  // Prior on regression to the mean contact rate.
   phi ~ beta(0.5, 0.5);
   
   // Define the AR(1) process for the contact-rate parameter.

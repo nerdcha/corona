@@ -49,7 +49,7 @@ corona_data <- list(n_obs=n_obs,
                     fit_model=1)
 
 
-model <- stan("sir.stan", data=fake_data, init=initial_values_function(n_simulated_obs),
+model <- stan("sir.stan", data=corona_data, init=initial_values_function(n_obs),
               chains=n_chains, iter=n_warmup_draws + n_posterior_draws_per_chain,
               warmup=n_warmup_draws)
 fitted_values <- rstan::extract(model)
@@ -109,6 +109,7 @@ forecast_plot <- ggplot(forecast_plot_df) + aes(x=date) +
     plot.subtitle=element_text(face="plain", colour="gray50"),
     plot.caption=element_text(face="italic", colour="gray20"))
 ggsave(forecast_plot, filename=paste(output_dir, "forecast.png", sep="/"), width=5, height=4)
+write_csv(forecast_plot_df, path=paste(output_dir, "forecast.csv", sep="/"))
 
 # Generate a plot of contact-rate over time.
 contact_rate_df <- obs_dataframe %>% select(Date, Total) %>%

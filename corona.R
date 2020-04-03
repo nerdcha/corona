@@ -25,7 +25,7 @@ rstan_options(auto_write=TRUE)
 
 source("corona_settings.R")
 
-output_dir <- getwd()
+output_dir <- paste(getwd(), "pics", sep="/")
 
 # https://www.abs.gov.au/AUSSTATS/abs@.nsf/Latestproducts/3101.0Main%20Features3Sep%202019?opendocument&tabname=Summary&prodno=3101.0&issue=Sep%202019&num=&view=
 population <- 25464100

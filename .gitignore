@@ -1,4 +1,4 @@
 .Rdata
 .Rhistory
 *.rds
-*.png
+.DS_Store

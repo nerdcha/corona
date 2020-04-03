@@ -63,7 +63,7 @@ parameters {
   real<lower=0> E0;               // Initial number of exposed individuals.
   real<lower=0> R0;               // Initial number of recovered individuals.
   real<lower=0, upper=1> phi;     // Contact-rate AR(1) parameter.
-  real<lower=0.001, upper=0.15> sigma;    // Std dev of innovations in the contact rate.
+  real log_sigma;                 // Logged std dev of innovations in the contact rate.
   real log_beta_t_deviation[n_obs];             // Time-varying contact rate shock.
 }
   
@@ -71,6 +71,9 @@ transformed parameters{
   real y_init[n_difeq];       // Initial conditions for both fractions of S and I
   real y_hat[n_obs, n_difeq];
   real dy_dt[n_obs, n_difeq];
+  real sigma;
+  
+  sigma = exp(log_sigma);
   
   y_init[1] = 1.0 - I0/n_pop - E0/n_pop;
   y_init[2] = E0/n_pop;
@@ -109,10 +112,10 @@ model {
   I0 ~ normal(100, 2.5);
   // Prior on initial recovered number.
   R0 ~ normal(10, 5.0);
-  // Prior on changes to the contact rate.
-  sigma ~ gamma(0.01 * 50.0, 50.0);
+  // Prior on log changes to the contact rate.
+  log_sigma ~ normal(-4.0, 0.5);
   // Prior on regression to the mean contact rate.
-  phi ~ beta(10.0, 1.0);
+  phi ~ beta(20.0, 2.0);
   
   // Define the AR(1) process for the percent deviation in the contact-rate parameter.
   log_beta_t_deviation[1] ~ normal(0, sigma);
@@ -158,6 +161,13 @@ generated quantities {
       print(sigma);
       print(log_beta_t_deviation);
       print(y_hat);
+    }
+    y_sim = poisson_rng(lambda_sim);
+  } else {
+    // Fill the simulated values with noise to prevent the model-fitting code throwing an error
+    // due to NaN effective sample sizes.
+    for (i in 1:n_obs) {
+      lambda_sim[i] = uniform_rng(0.0, n_pop);
     }
     y_sim = poisson_rng(lambda_sim);
   }

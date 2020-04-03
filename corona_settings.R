@@ -16,10 +16,10 @@
 # Initial values and sampler settings for Stan, extracted here so they
 # can be shared between production and testing.
 
-n_chains <- 6
+n_chains <- 5
 n_posterior_draws_per_chain <- 1000
 n_posterior_draws <- n_chains * n_posterior_draws_per_chain
-n_warmup_draws <- 1000
+n_warmup_draws <- 2000
 
 # A function-factory that returns an initial value function.
 # (Some initial values depend on the number of obs., which varies between
@@ -31,7 +31,7 @@ initial_values_function <- function(n_obs) {
          E0=runif(1, 50, 1000),
          R0=runif(1, 0, 20),
          phi=runif(1, 0.3, 0.9),
-         sigma=runif(1, 0.002, 0.02),
+         log_sigma=runif(1, -6, -2),
          log_beta_t_deviation=runif(n_obs, -0.05, 0.05)
     )
   }

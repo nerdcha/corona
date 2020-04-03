@@ -102,23 +102,29 @@ print(paste("There were", nrow(poorly_estimated_params), "poorly estimated param
             round(expected_rejections), ")"))
 if (nrow(poorly_estimated_params) > expected_rejections) {
   poorly_estimated_params %>% head(10) %>% as.tbl() %>% print()
+  stop("TEST FAILURE: Too many unidentified parameters")
 }
 
-# Check that all parameters are being sampled efficiently.
-min_effs <- data.frame(
+# Check that all parameters are likely to be sampled efficiently.
+low_effs <- data.frame(
   parameter=character(),
-  min_eff=numeric()
+  low_eff=numeric()
 )
 for (param_i in seq_along(eff)) {
-  min_effs <- rbind(min_effs,
+  # Replace total failures with 0.
+  eff_values <- eff[, param_i]
+  eff_values[is.na(eff_values)] <- 0
+  low_effs <- rbind(low_effs,
                     data.frame(
                       parameter=names(eff)[param_i],
-                      min_eff=min(eff[, param_i])
+                      low_eff=quantile(eff_values, probs=(0.25))
                     ))
 }
 eff_warning_threshold <- 0.25 * n_posterior_draws
-poorly_mixed_params <- min_effs %>% arrange(min_eff) %>% filter(min_eff < eff_warning_threshold)
+poorly_mixed_params <- low_effs %>% arrange(low_eff) %>% filter(low_eff < eff_warning_threshold)
 print(paste("There were", nrow(poorly_mixed_params), "inefficiently mixed parameters."))
-if (nrow(poorly_mixed_params) > 0) {
+if (nrow(poorly_mixed_params) > 25) {
   poorly_mixed_params %>% head(10) %>% as.tbl() %>% print()
+  stop("TEST FAILURE: parameter mixing is not good enough")
 }
+

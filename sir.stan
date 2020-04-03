@@ -47,6 +47,7 @@ data {
   real t0;      // Initial time tick for the ODE solver. Must be provided in the data block.
   real ts[2];   // Time ticks for the ODE solver. Must be provided in the data block.
   real tf[n_forecast];  // Time ticks for the forward projections.
+  int<lower=0, upper=1> fit_model;  // If 0, only draws from the priors will be used.
 }
   
 transformed data {
@@ -60,9 +61,10 @@ parameters {
   real<lower=0> theta[n_theta];   // ODE model parameters.
   real<lower=0> I0;               // Initial number of infected individuals
   real<lower=0> E0;               // Initial number of exposed individuals.
+  real<lower=0> R0;               // Initial number of recovered individuals.
   real<lower=0, upper=1> phi;     // Contact-rate AR(1) parameter.
-  real<lower=0> sigma;            // Std dev of innovations in the contact rate.
-  real beta_t[n_obs];             // Time-varying contact rate.
+  real<lower=0.001, upper=0.15> sigma;    // Std dev of innovations in the contact rate.
+  real log_beta_t_deviation[n_obs];             // Time-varying contact rate shock.
 }
   
 transformed parameters{
@@ -73,16 +75,16 @@ transformed parameters{
   y_init[1] = 1.0 - I0/n_pop - E0/n_pop;
   y_init[2] = E0/n_pop;
   y_init[3] = I0/n_pop;
-  y_init[4] = 0;
+  y_init[4] = R0/n_pop;
   
   // Use a deterministic ODE solver to go, in continuous time, from time `t` to `t+1`,
-  // conditional on the contact-rate parameter beta_t.
+  // conditional on the contact-rate parameter = exp(log_beta_t_deviation)*theta[1].
   dy_dt[1,] = SIR(0, y_init, theta, x_r, x_i);
   for (i in 1:n_difeq) {
     y_hat[1,i] = y_init[i] + dy_dt[1,i];
   }
   for (t in 2:n_obs) {
-    dy_dt[t,] = SIR(0, y_hat[t-1,], {beta_t[t], theta[2], theta[3]}, x_r, x_i);
+    dy_dt[t,] = SIR(0, y_hat[t-1,], {exp(log_beta_t_deviation[t])*theta[1], theta[2], theta[3]}, x_r, x_i);
     for (i in 1:n_difeq) {
       y_hat[t,i] = y_hat[t-1,i] + dy_dt[t,i];
     }
@@ -93,33 +95,39 @@ model {
   // Poisson rate parameter at each time point.
   real lambda[n_obs];
   
+  // Prior weights on ODE parameters are informed by literature on the novel coronavirus outbreak
+  // in China; also, they must be tight enough that they stay close to [0,1] or the model becomes unstable.
   // Prior on steady-state contact rate: given 7-day infectious period, R0 ~ 2.
-  theta[1] ~ normal(2.0/7.0, 0.05);
+  theta[1] ~ lognormal(log(2.0/7.0), 1.0/7.0);
   // Prior on mean incubation period: 5 days.
-  theta[2] ~ normal(1.0/5.0, 1.0);
+  theta[2] ~ lognormal(log(1.0/5.0), 0.5/5.0);
   // Prior on infectious period: 7 days.
-  theta[3] ~ normal(1.0/7.0, 0.01);
+  theta[3] ~ lognormal(log(1.0/7.0), 1.0/7.0);
   // Prior on t0 incubation number: 300 ± 200. Note that data starts with 100 measured infections.
   E0 ~ normal(300, 100);
   // Prior on initial infections number: 100 ± 5.
   I0 ~ normal(100, 2.5);
-  // Prior on changes to the contact rate: up to 5% of the steady-state rate.
-  sigma ~ normal(0, 0.015);
+  // Prior on initial recovered number.
+  R0 ~ normal(10, 5.0);
+  // Prior on changes to the contact rate.
+  sigma ~ gamma(0.01 * 50.0, 50.0);
   // Prior on regression to the mean contact rate.
-  phi ~ beta(0.5, 0.5);
+  phi ~ beta(10.0, 1.0);
   
-  // Define the AR(1) process for the contact-rate parameter.
-  beta_t[1] ~ normal(theta[1], sigma);
+  // Define the AR(1) process for the percent deviation in the contact-rate parameter.
+  log_beta_t_deviation[1] ~ normal(0, sigma);
   for (i in 2:n_obs) {
-    beta_t[i] ~ normal(phi*beta_t[i-1] + (1-phi)*theta[1], sigma);
+    log_beta_t_deviation[i] ~ normal(phi*log_beta_t_deviation[i-1], sigma);
   }
   
   // Define the observation process.
-  for (i in 1:n_obs){
-    // Public datasets report cumulative confirmed cases, which is I+R in this model.
-    lambda[i] = (y_hat[i,3] + y_hat[i,4]) * n_pop;
+  if (fit_model == 1) {
+    for (i in 1:n_obs){
+      // Public datasets report cumulative confirmed cases, which is I+R in this model.
+      lambda[i] = (y_hat[i,3] + y_hat[i,4]) * n_pop;
+    }
+    y ~ poisson(lambda);
   }
-  y ~ poisson(lambda);
 }
   
 generated quantities {
@@ -127,11 +135,30 @@ generated quantities {
   real y_forc[n_forecast, n_difeq];
   // The initial condition for the forward projection = the end state of the data.
   real y_init_forc[n_difeq];
+  // For model-checking: simulated count data.
+  real y_sim[n_obs];
+  // For model-checking: simulated Poisson rates.
+  real lambda_sim[n_obs];
+  
+  // Generate forward projections deterministically, conditional on the final value of the contact-rate parameter.
   y_init_forc[1] = y_hat[n_obs, 1];
   y_init_forc[2] = y_hat[n_obs, 2];
   y_init_forc[3] = y_hat[n_obs, 3];
   y_init_forc[4] = y_hat[n_obs, 4];
+  y_forc = integrate_ode_rk45(SIR, y_init_forc, t0, tf, {exp(log_beta_t_deviation[n_obs])*theta[1], theta[2], theta[3]}, x_r, x_i);
   
-  // Generate forward projections deterministically, conditional on the final value of the contact-rate parameter.
-  y_forc = integrate_ode_rk45(SIR, y_init_forc, t0, tf, {beta_t[n_obs], theta[2], theta[3]}, x_r, x_i);
+  if (fit_model == 0) {
+    // If doing model-checking, generate simulated count data.
+    for (i in 1:n_obs){
+      // Public datasets report cumulative confirmed cases, which is I+R in this model.
+      lambda_sim[i] = (y_hat[i,3] + y_hat[i,4]) * n_pop;
+    }
+    if (min(lambda_sim) < 0) {
+      print(theta);
+      print(sigma);
+      print(log_beta_t_deviation);
+      print(y_hat);
+    }
+    y_sim = poisson_rng(lambda_sim);
+  }
 }

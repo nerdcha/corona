@@ -23,6 +23,8 @@ library(scales)
 options(mc.cores=parallel::detectCores())
 rstan_options(auto_write=TRUE)
 
+source("corona_settings.R")
+
 output_dir <- getwd()
 
 # https://www.abs.gov.au/AUSSTATS/abs@.nsf/Latestproducts/3101.0Main%20Features3Sep%202019?opendocument&tabname=Summary&prodno=3101.0&issue=Sep%202019&num=&view=
@@ -43,19 +45,13 @@ corona_data <- list(n_obs=n_obs,
                     y=obs,
                     t0=0,
                     ts=1:2,
-                    tf=1:n_forecast)
-initial_values <- function() {
-  beta0 <- runif(1, 0, 5)
-  list(theta=c(beta0, runif(1, 0.2, 0.4), runif(1, 0.2, 0.4)), 
-       I0=runif(1, 90, 150),
-       E0=runif(1, 50, 1000),
-       phi=runif(1, 0.3, 0.9),
-       sigma=runif(1, 0.0001, 0.5),
-       beta_t=rep(beta0, n_obs)
-  )
-}
+                    tf=1:n_forecast,
+                    fit_model=1)
 
-model <- stan("sir.stan", data=corona_data, init=initial_values, chains=4, iter=2000)
+
+model <- stan("sir.stan", data=fake_data, init=initial_values_function(n_simulated_obs),
+              chains=n_chains, iter=n_warmup_draws + n_posterior_draws_per_chain,
+              warmup=n_warmup_draws)
 fitted_values <- rstan::extract(model)
 
 # Given a TxD array and a string name, return a data frame of T-length vectors suitable for a fanchart.
@@ -116,7 +112,8 @@ ggsave(forecast_plot, filename=paste(output_dir, "forecast.png", sep="/"), width
 
 # Generate a plot of contact-rate over time.
 contact_rate_df <- obs_dataframe %>% select(Date, Total) %>%
-  cbind(get_fanchart_series(fitted_values$beta_t / fitted_values$theta[,3], "R_t"))
+  cbind(get_fanchart_series(exp(fitted_values$log_beta_t_deviation) * fitted_values$theta[,1]
+                            / fitted_values$theta[,3], "R_t"))
 contact_rate_plot <- ggplot(contact_rate_df) + aes(x=Date) +
   annotate(geom="rect", ymin=0, ymax=1,
            xmin=contact_rate_df$Date[1] - 1,

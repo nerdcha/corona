@@ -31,7 +31,8 @@ output_dir <- getwd()
 population <- 25464100
 
 australia_cases <- read_csv("https://raw.githubusercontent.com/pappubahry/AU_COVID19/master/time_series_cases.csv")
-# Growth rates are very different <100 cases, so start from that point.
+# Growth rates are very different <100 cases, so start from that point. (That insight is the basis of
+# the Cowgill Chart; see https://blog.grattan.edu.au/2020/03/australian-governments-can-choose-to-slow-the-spread-of-coronavirus-but-they-must-act-immediately/)
 obs_dataframe <- australia_cases %>% filter(Total >= 100)
 obs <- obs_dataframe %>% pull(Total)
 n_obs <- length(obs)

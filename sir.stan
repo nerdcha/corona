@@ -58,10 +58,12 @@ transformed data {
 }
   
 parameters {
-  real<lower=0> theta[n_theta];   // ODE model parameters.
+  real<lower=0> R0;               // The unconditional basic reproduction number.
+  real<lower=0> average_incubation_days;  // An ODE parameter: {a^-1} in the Wikipedia notation.
+  real<lower=0> average_infectious_days;  // An ODE parameter: {gamma^-1} in the Wikipedia notation.
   real<lower=0> I0;               // Initial number of infected individuals
   real<lower=0> E0;               // Initial number of exposed individuals.
-  real<lower=0> R0;               // Initial number of recovered individuals.
+  real<lower=0> Rec0;               // Initial number of recovered individuals.
   real<lower=0, upper=1> phi;     // Contact-rate AR(1) parameter.
   real log_sigma;                 // Logged std dev of innovations in the contact rate.
   real log_beta_t_deviation[n_obs];             // Time-varying contact rate shock.
@@ -72,22 +74,29 @@ transformed parameters{
   real y_hat[n_obs, n_difeq];
   real dy_dt[n_obs, n_difeq];
   real sigma;
+  real gamma;
+  real a;
+  real beta;
   
   sigma = exp(log_sigma);
+  
+  a = 1.0/average_incubation_days;
+  gamma = 1.0/average_infectious_days;
+  beta = R0 * gamma;
   
   y_init[1] = 1.0 - I0/n_pop - E0/n_pop;
   y_init[2] = E0/n_pop;
   y_init[3] = I0/n_pop;
-  y_init[4] = R0/n_pop;
+  y_init[4] = Rec0/n_pop;
   
   // Use a deterministic ODE solver to go, in continuous time, from time `t` to `t+1`,
   // conditional on the contact-rate parameter = exp(log_beta_t_deviation)*theta[1].
-  dy_dt[1,] = SIR(0, y_init, theta, x_r, x_i);
+  dy_dt[1,] = SIR(0, y_init, {beta, a, gamma}, x_r, x_i);
   for (i in 1:n_difeq) {
     y_hat[1,i] = y_init[i] + dy_dt[1,i];
   }
   for (t in 2:n_obs) {
-    dy_dt[t,] = SIR(0, y_hat[t-1,], {exp(log_beta_t_deviation[t])*theta[1], theta[2], theta[3]}, x_r, x_i);
+    dy_dt[t,] = SIR(0, y_hat[t-1,], {exp(log_beta_t_deviation[t])*beta, a, gamma}, x_r, x_i);
     for (i in 1:n_difeq) {
       y_hat[t,i] = y_hat[t-1,i] + dy_dt[t,i];
     }
@@ -99,19 +108,17 @@ model {
   real lambda[n_obs];
   
   // Prior weights on ODE parameters are informed by literature on the novel coronavirus outbreak
-  // in China; also, they must be tight enough that they stay close to [0,1] or the model becomes unstable.
-  // Prior on steady-state contact rate: given 7-day infectious period, R0 ~ 2.
-  theta[1] ~ lognormal(log(2.0/7.0), 1.0/7.0);
-  // Prior on mean incubation period: 5 days.
-  theta[2] ~ lognormal(log(1.0/5.0), 0.5/5.0);
-  // Prior on infectious period: 7 days.
-  theta[3] ~ lognormal(log(1.0/7.0), 1.0/7.0);
+  // in China.
+  R0 ~ normal(3.5, 0.5);
+  average_incubation_days ~ normal(5.5, 1.5);
+  // Recovery reports from VIC and WA lag case reports by ~7 days and ~10 days respectively.
+  average_infectious_days ~ normal(7.0, 0.75);
   // Prior on t0 incubation number: 300 ± 200. Note that data starts with 100 measured infections.
   E0 ~ normal(300, 100);
   // Prior on initial infections number: 100 ± 5.
   I0 ~ normal(100, 2.5);
   // Prior on initial recovered number.
-  R0 ~ normal(10, 5.0);
+  Rec0 ~ normal(10, 5.0);
   // Prior on log changes to the contact rate.
   log_sigma ~ normal(-4.0, 0.5);
   // Prior on regression to the mean contact rate.
@@ -148,7 +155,7 @@ generated quantities {
   y_init_forc[2] = y_hat[n_obs, 2];
   y_init_forc[3] = y_hat[n_obs, 3];
   y_init_forc[4] = y_hat[n_obs, 4];
-  y_forc = integrate_ode_rk45(SIR, y_init_forc, t0, tf, {exp(log_beta_t_deviation[n_obs])*theta[1], theta[2], theta[3]}, x_r, x_i);
+  y_forc = integrate_ode_rk45(SIR, y_init_forc, t0, tf, {exp(log_beta_t_deviation[n_obs])*beta, a, gamma}, x_r, x_i);
   
   if (fit_model == 0) {
     // If doing model-checking, generate simulated count data.
@@ -157,7 +164,7 @@ generated quantities {
       lambda_sim[i] = (y_hat[i,3] + y_hat[i,4]) * n_pop;
     }
     if (min(lambda_sim) < 0) {
-      print(theta);
+      print({beta, a, gamma});
       print(sigma);
       print(log_beta_t_deviation);
       print(y_hat);

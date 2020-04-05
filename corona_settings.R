@@ -26,10 +26,12 @@ n_warmup_draws <- 2000
 # production and tests.)
 initial_values_function <- function(n_obs) {
   function() {
-    list(theta=c(runif(1, 0.2, 0.35), runif(1, 0.2, 0.4), runif(1, 0.2, 0.4)), 
-         I0=runif(1, 90, 150),
-         E0=runif(1, 50, 1000),
-         R0=runif(1, 0, 20),
+    list(R0=runif(1, 2, 5),
+         average_incubation_days=runif(1, 3, 7),
+         average_infectious_days=runif(1, 5, 8),
+         I0=runif(1, 90, 115),
+         E0=runif(1, 150, 750),
+         Rec0=runif(1, 0, 20),
          phi=runif(1, 0.3, 0.9),
          log_sigma=runif(1, -6, -2),
          log_beta_t_deviation=runif(n_obs, -0.05, 0.05)

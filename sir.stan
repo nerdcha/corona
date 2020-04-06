@@ -78,7 +78,8 @@ transformed parameters{
   real a;
   real beta;
   
-  sigma = exp(log_sigma);
+  // Shift the mean of log(sigma) here, since Stan prefers priors close to zero.
+  sigma = exp(-4.0 + log_sigma);
   
   a = 1.0/average_incubation_days;
   gamma = 1.0/average_infectious_days;
@@ -113,14 +114,14 @@ model {
   average_incubation_days ~ normal(5.5, 1.5);
   // Recovery reports from VIC and WA lag case reports by ~7 days and ~10 days respectively.
   average_infectious_days ~ normal(7.0, 0.75);
-  // Prior on t0 incubation number: 300 ± 200. Note that data starts with 100 measured infections.
-  E0 ~ normal(300, 100);
-  // Prior on initial infections number: 100 ± 5.
-  I0 ~ normal(100, 2.5);
-  // Prior on initial recovered number.
-  Rec0 ~ normal(10, 5.0);
-  // Prior on log changes to the contact rate.
-  log_sigma ~ normal(-4.0, 0.5);
+  
+  // Heavy-tailed priors on initial conditions.
+  E0 ~ student_t(3, 0, 100);
+  I0 ~ student_t(3, 0, 100);
+  Rec0 ~ student_t(3, 0, 100);
+  
+  // Mean-shifted prior on log changes to the contact rate.
+  log_sigma ~ normal(0, 0.5);
   // Prior on regression to the mean contact rate.
   phi ~ beta(20.0, 2.0);
   

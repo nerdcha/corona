@@ -114,8 +114,8 @@ write_csv(forecast_plot_df, path=paste(output_dir, "forecast.csv", sep="/"))
 
 # Generate a plot of contact-rate over time.
 contact_rate_df <- obs_dataframe %>% select(Date, Total) %>%
-  cbind(get_fanchart_series(exp(fitted_values$log_beta_t_deviation) * fitted_values$theta[,1]
-                            / fitted_values$theta[,3], "R_t"))
+  cbind(get_fanchart_series(exp(fitted_values$log_beta_t_deviation) * rep(fitted_values$beta, n_obs)
+                            / rep(fitted_values$gamma, n_obs), "R_t"))
 contact_rate_plot <- ggplot(contact_rate_df) + aes(x=Date) +
   annotate(geom="rect", ymin=0, ymax=1,
            xmin=contact_rate_df$Date[1] - 1,

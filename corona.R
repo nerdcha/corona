@@ -40,8 +40,8 @@ n_forecast <- 90
 
 corona_data <- list(n_obs=n_obs,
                     n_forecast=n_forecast,
-                    n_theta=3,
-                    n_difeq=4,
+                    n_theta=4,
+                    n_difeq=6,
                     n_pop=population,
                     y=obs,
                     t0=0,
@@ -52,7 +52,7 @@ corona_data <- list(n_obs=n_obs,
 
 model <- stan("sir.stan", data=corona_data, init=initial_values_function(n_obs),
               chains=n_chains, iter=n_warmup_draws + n_posterior_draws_per_chain,
-              warmup=n_warmup_draws)
+              warmup=n_warmup_draws, control=stan_control)
 fitted_values <- rstan::extract(model)
 
 # Given a TxD array and a string name, return a data frame of T-length vectors suitable for a fanchart.
@@ -91,7 +91,8 @@ fitted_exposed <- get_fanchart_series(population*(fitted_values$y_hat[,,2]), "ex
 out_of_sample_exposed <- matrix(NA, n_forecast, ncol(fitted_exposed)) %>% as.data.frame()
 names(out_of_sample_exposed) <- names(fitted_exposed)
 forecast_plot_df <- fitted_exposed %>% rbind(out_of_sample_exposed) %>%
-  cbind(get_fanchart_series(population*(cbind(fitted_values$y_hat[,,3], fitted_values$y_forc[,,3])), "infectious")) %>%
+  cbind(get_fanchart_series(population*(cbind(fitted_values$y_hat[,,3] + fitted_values$y_hat[,,5],
+                                              fitted_values$y_forc[,,3] + fitted_values$y_forc[,,5])), "infectious")) %>%
   cbind(data.frame(date=seq(from=obs_dataframe$Date[1], length.out=(n_obs + n_forecast), by="day")))
 forecast_plot <- ggplot(forecast_plot_df) + aes(x=date) +
   geom_ribbon(aes(ymin=exposed_lo5, ymax=exposed_hi5), fill="red", alpha=0.1) +
@@ -114,7 +115,7 @@ write_csv(forecast_plot_df, path=paste(output_dir, "forecast.csv", sep="/"))
 
 # Generate a plot of contact-rate over time.
 contact_rate_df <- obs_dataframe %>% select(Date, Total) %>%
-  cbind(get_fanchart_series(exp(fitted_values$log_beta_t_deviation) * rep(fitted_values$beta, n_obs)
+  cbind(get_fanchart_series(exp(-fitted_values$log_beta_t_deviation) * rep(fitted_values$beta, n_obs)
                             / rep(fitted_values$gamma, n_obs), "R_t"))
 contact_rate_plot <- ggplot(contact_rate_df) + aes(x=Date) +
   annotate(geom="rect", ymin=0, ymax=1,

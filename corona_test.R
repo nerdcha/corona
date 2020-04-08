@@ -31,8 +31,8 @@ n_forecast <- 2
 population <- 1000000
 sim_data <- list(n_obs=n_simulated_obs,
                   n_forecast=n_forecast,
-                  n_theta=3,
-                  n_difeq=4,
+                  n_theta=4,
+                  n_difeq=6,
                   n_pop=population,
                   y=rep(1, n_simulated_obs),
                   t0=0,
@@ -63,7 +63,7 @@ for (sim_i in 1:n_simulations) {
   fake_data$fit_model <- 1
   fitted_model <- stan("sir.stan", data=fake_data, init=initial_values_function(n_simulated_obs),
                        chains=n_chains, iter=n_warmup_draws + n_posterior_draws_per_chain,
-                       warmup=n_warmup_draws)
+                       warmup=n_warmup_draws, control=stan_control)
   
   # Find the percentile that each actual parameter value occupies in the posterior draws.
   fitted_values <- as.data.frame(fitted_model)
